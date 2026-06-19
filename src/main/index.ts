@@ -10,13 +10,21 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
 function createWindow(): void {
-  // Create the browser window.
+  // Create the browser window with Apple HIG layouts (Windows Acrylic implementation)
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1200, // Slightly wider default to support a beautiful split-view layout
+    height: 800,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
+    
+    // --- NATIVE MAC-STYLE GLASS CONFIGURATION ---
+    titleBarStyle: 'hiddenInset',       // Insets the close/minimize/maximize traffic lights
+    backgroundMaterial: 'acrylic',     // Applies the sleek, native fluid-blur on Windows 11
+    backgroundColor: '#00000000',      // Translucency depends on a completely clear window channel
+    transparent: true,                 // Allows the native OS blur to render behind web content
+    // --------------------------------------------
+
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -57,6 +65,27 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+
+  // --- CUSTOM WINDOW CONTROLS ---
+  ipcMain.on('window-minimize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    win?.minimize();
+  });
+
+  ipcMain.on('window-maximize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
+  });
+
+  ipcMain.on('window-close', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    win?.close();
+  });
 
   // --- OMNIAI AUTO-ROUTER ENGINE ---
   ipcMain.handle('send-prompt', async (_, payload) => {

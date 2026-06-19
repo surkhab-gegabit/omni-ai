@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-ai-dark text-gray-100 m-0 p-0 font-sans h-screen overflow-hidden;
+/* Add this to strip away solid backgrounds */
+html, 
+body, 
+#root {
+  background-color: transparent !important;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden; 
 }
