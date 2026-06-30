@@ -1,0 +1,51 @@
+name: Build and Release OmniAI
+
+# 1. THE TRIGGER: This tells GitHub servers to only run when you push a new version tag (e.g., v1.1.1)
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    # 2. THE ENVIRONMENT: We need a Windows server to build a Windows .exe
+    runs-on: windows-latest
+    
+    # Required permission to allow the bot to create a release page on your repo
+    permissions:
+      contents: write 
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 3. PACKAGE MANAGER: We strictly tell the server to use pnpm, just like you did locally
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      # 4. COMPILATION: Run the exact Windows build script you used earlier
+      - name: Build Windows Executable
+        run: pnpm run build:win
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 5. DEPLOYMENT: Automatically grab the .exe from the dist folder and attach it to a new GitHub Release
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/*.exe
