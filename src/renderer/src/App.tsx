@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { motion } from 'framer-motion'
 
 function App() {
   const [prompt, setPrompt] = useState('')
@@ -46,7 +47,18 @@ function App() {
 
   return (
     // Base layout relies on a completely transparent background so Electron Acrylic can display behind it
-    <div className="flex flex-col h-screen w-full bg-transparent text-gray-200 font-sans antialiased selection:bg-blue-500/30">
+    // Updated to a motion.div for the native Apple-style spring launch animation
+    <motion.div 
+      initial={{ scale: 0.94, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{
+        type: "spring",
+        stiffness: 260,
+        damping: 26,
+        mass: 1
+      }}
+      className="flex flex-col h-screen w-full bg-transparent text-gray-200 font-sans antialiased selection:bg-blue-500/30"
+    >
       
       {/* 1. NATIVE WINDOW HEADER BAR (Draggable region) */}
       <div 
@@ -117,51 +129,72 @@ function App() {
               Engines
             </div>
             
-            <div className="flex flex-col gap-[2px]">
+            {/* FLUID TAB SWITCHER IMPLEMENTATION */}
+            <div className="flex flex-col gap-[2px] relative">
+              
+              {/* ChatGPT Button */}
               <button 
                 onClick={() => setActiveModel('chatgpt')}
-                className={`px-3 py-2 rounded-lg text-sm font-medium text-left transition-all duration-150 flex items-center justify-between ${
-                  activeModel === 'chatgpt' 
-                    ? 'bg-white/[0.12] text-white shadow-sm font-semibold' 
-                    : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
+                className={`relative px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors duration-150 flex items-center justify-between ${
+                  activeModel === 'chatgpt' ? 'text-white font-semibold' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-2 h-2 rounded-full ${activeModel === 'chatgpt' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'bg-gray-600'}`}></div>
+                {activeModel === 'chatgpt' && (
+                  <motion.div 
+                    layoutId="activeEngine" 
+                    className="absolute inset-0 bg-white/[0.12] rounded-lg shadow-sm border border-white/[0.04]" 
+                    transition={{ type: "spring", stiffness: 300, damping: 28, mass: 1 }}
+                  />
+                )}
+                <div className="flex items-center gap-2.5 relative z-10">
+                  <div className={`w-2 h-2 rounded-full transition-colors ${activeModel === 'chatgpt' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'bg-gray-600'}`}></div>
                   ChatGPT
                 </div>
-                {activeModel === 'chatgpt' && <span className="text-[10px] text-emerald-400 font-mono opacity-80">Active</span>}
+                {activeModel === 'chatgpt' && <span className="text-[10px] text-emerald-400 font-mono opacity-80 relative z-10">Active</span>}
               </button>
 
+              {/* Claude Button */}
               <button 
                 onClick={() => setActiveModel('claude')}
-                className={`px-3 py-2 rounded-lg text-sm font-medium text-left transition-all duration-150 flex items-center justify-between ${
-                  activeModel === 'claude' 
-                    ? 'bg-white/[0.12] text-white shadow-sm font-semibold' 
-                    : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
+                className={`relative px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors duration-150 flex items-center justify-between ${
+                  activeModel === 'claude' ? 'text-white font-semibold' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-2 h-2 rounded-full ${activeModel === 'claude' ? 'bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.5)]' : 'bg-gray-600'}`}></div>
+                {activeModel === 'claude' && (
+                  <motion.div 
+                    layoutId="activeEngine" 
+                    className="absolute inset-0 bg-white/[0.12] rounded-lg shadow-sm border border-white/[0.04]" 
+                    transition={{ type: "spring", stiffness: 300, damping: 28, mass: 1 }}
+                  />
+                )}
+                <div className="flex items-center gap-2.5 relative z-10">
+                  <div className={`w-2 h-2 rounded-full transition-colors ${activeModel === 'claude' ? 'bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.5)]' : 'bg-gray-600'}`}></div>
                   Claude
                 </div>
-                {activeModel === 'claude' && <span className="text-[10px] text-orange-400 font-mono opacity-80">Active</span>}
+                {activeModel === 'claude' && <span className="text-[10px] text-orange-400 font-mono opacity-80 relative z-10">Active</span>}
               </button>
 
+              {/* Gemini Button */}
               <button 
                 onClick={() => setActiveModel('gemini')}
-                className={`px-3 py-2 rounded-lg text-sm font-medium text-left transition-all duration-150 flex items-center justify-between ${
-                  activeModel === 'gemini' 
-                    ? 'bg-white/[0.12] text-white shadow-sm font-semibold' 
-                    : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
+                className={`relative px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors duration-150 flex items-center justify-between ${
+                  activeModel === 'gemini' ? 'text-white font-semibold' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-2 h-2 rounded-full ${activeModel === 'gemini' ? 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.5)]' : 'bg-gray-600'}`}></div>
+                {activeModel === 'gemini' && (
+                  <motion.div 
+                    layoutId="activeEngine" 
+                    className="absolute inset-0 bg-white/[0.12] rounded-lg shadow-sm border border-white/[0.04]" 
+                    transition={{ type: "spring", stiffness: 300, damping: 28, mass: 1 }}
+                  />
+                )}
+                <div className="flex items-center gap-2.5 relative z-10">
+                  <div className={`w-2 h-2 rounded-full transition-colors ${activeModel === 'gemini' ? 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.5)]' : 'bg-gray-600'}`}></div>
                   Gemini
                 </div>
-                {activeModel === 'gemini' && <span className="text-[10px] text-blue-400 font-mono opacity-80">Active</span>}
+                {activeModel === 'gemini' && <span className="text-[10px] text-blue-400 font-mono opacity-80 relative z-10">Active</span>}
               </button>
+
             </div>
           </div>
           
@@ -237,7 +270,7 @@ function App() {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
