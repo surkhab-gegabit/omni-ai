@@ -1,4 +1,5 @@
 import path from 'path'
+import os from 'os' // <-- 1. IMPORT NODE'S NATIVE OS MODULE
 // We use require here to bypass TypeScript strict-mode complaints for these specific plugins
 const { chromium } = require('playwright-extra')
 const stealth = require('puppeteer-extra-plugin-stealth')()
@@ -9,21 +10,18 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
-function createWindow(): void {
-  // Create the browser window with Apple HIG layouts (Windows Acrylic implementation)
+function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
-    width: 1200, // Slightly wider default to support a beautiful split-view layout
+    width: 1200,
     height: 800,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     
-    // --- NATIVE MAC-STYLE GLASS CONFIGURATION ---
-    titleBarStyle: 'hiddenInset',       // Insets the close/minimize/maximize traffic lights
-    backgroundMaterial: 'acrylic',     // Applies the sleek, native fluid-blur on Windows 11
-    backgroundColor: '#00000000',      // Translucency depends on a completely clear window channel
-    transparent: true,                 // Allows the native OS blur to render behind web content
-    // --------------------------------------------
+    titleBarStyle: 'hiddenInset',
+    backgroundMaterial: 'acrylic',
+    backgroundColor: '#00000000',
+    transparent: true,
 
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -40,31 +38,64 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+  
+  return mainWindow;
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
+// --- HARDWARE MATH HELPER ---
+function getCpuUsage() {
+  const cpus = os.cpus();
+  let user = 0, nice = 0, sys = 0, idle = 0, irq = 0;
+  for (let cpu in cpus) {
+    user += cpus[cpu].times.user;
+    nice += cpus[cpu].times.nice;
+    sys += cpus[cpu].times.sys;
+    idle += cpus[cpu].times.idle;
+    irq += cpus[cpu].times.irq;
+  }
+  return { idle, total: user + nice + sys + idle + irq };
+}
+
 app.whenReady().then(() => {
-  // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  const mainWindow = createWindow();
+
+  // --- 2. THE TELEMETRY BROADCASTER ---
+  let startMeasure = getCpuUsage();
+  
+  setInterval(() => {
+    // Calculate CPU %
+    const endMeasure = getCpuUsage();
+    const idleDifference = endMeasure.idle - startMeasure.idle;
+    const totalDifference = endMeasure.total - startMeasure.total;
+    const percentageCpu = 100 - ~~(100 * idleDifference / totalDifference);
+    startMeasure = endMeasure;
+
+    // Calculate RAM %
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+    const ramPercentage = Math.round((usedMem / totalMem) * 100);
+
+    // Broadcast to the frontend safely
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('hardware-telemetry', {
+        cpu: percentageCpu,
+        ram: ramPercentage
+      });
+    }
+  }, 1000); // Updates exactly once per second
+
 
   // --- CUSTOM WINDOW CONTROLS ---
   ipcMain.on('window-minimize', (event) => {
@@ -90,15 +121,35 @@ app.whenReady().then(() => {
   // --- OMNIAI AUTO-ROUTER ENGINE ---
   ipcMain.handle('send-prompt', async (_, payload) => {
     const { promptText, model } = payload;
-    const userDataDir = path.join(app.getPath('userData'), 'omni-browser-data');
     console.log(`🤖 Routing to ${model}: ${promptText}`);
 
-    let context: any = null; // Declare context outside so 'finally' can access it
+    // 1. OFFLINE LOCAL ENGINE (Llama 3)
+    if (model === 'local-llama') {
+      try {
+        const response = await fetch('http://localhost:11434/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'llama3',
+            prompt: promptText,
+            stream: false
+          })
+        });
+        
+        const data = await response.json();
+        return data.response;
+      } catch (error) {
+        return "System Error: Local Llama engine is offline. Please ensure Ollama is running in the background.";
+      }
+    }
+
+    // 2. CLOUD ENGINES (ChatGPT, Claude, Gemini)
+    const userDataDir = path.join(app.getPath('userData'), 'omni-browser-data');
+    let context: any = null;
 
     try {
       context = await chromium.launchPersistentContext(userDataDir, {
         headless: false, 
-        // 🚨 TEMPORARY: Change to '0,0' to log in. Change back to '-32000,-32000' after!
         args: ['--window-position=0,0'], 
         channel: 'chrome',
         ignoreDefaultArgs: ['--enable-automation']
@@ -107,24 +158,17 @@ app.whenReady().then(() => {
       const page = context.pages().length > 0 ? context.pages()[0] : await context.newPage();
       let textOutput = "Error: Engine routing failed.";
 
-      // 🔀 THE SWITCHBOARD V3 (Strict-Mode Bypass & Button Clicks)
       switch (model) {
         case 'chatgpt':
           await page.goto('https://chatgpt.com', { waitUntil: 'domcontentloaded' });
           const gptInput = '#prompt-textarea'; 
           await page.waitForSelector(gptInput, { timeout: 15000 });
-          await page.locator(gptInput).first().focus(); // Added .first() for safety
+          await page.locator(gptInput).first().focus();
           await page.keyboard.insertText(promptText);
           await page.keyboard.press('Enter');
-          
           await page.waitForTimeout(10000); 
-          
           const gptResponses = await page.$$('.markdown');
-          if (gptResponses.length > 0) {
-            textOutput = await gptResponses[gptResponses.length - 1].innerText();
-          } else {
-            textOutput = "Engine Error: Could not find ChatGPT's response class on the page.";
-          }
+          if (gptResponses.length > 0) textOutput = await gptResponses[gptResponses.length - 1].innerText();
           break;
 
         case 'claude':
@@ -134,46 +178,24 @@ app.whenReady().then(() => {
           await page.locator(claudeInput).first().focus();
           await page.keyboard.insertText(promptText);
           await page.waitForTimeout(500);
-          
-          // Try clicking the Send button directly if Enter fails
-          try {
-            await page.locator('button[aria-label="Send Message"]').click({ timeout: 2000 });
-          } catch {
-            await page.keyboard.press('Enter'); // Fallback
-          }
-          
+          try { await page.locator('button[aria-label="Send Message"]').click({ timeout: 2000 }); } 
+          catch { await page.keyboard.press('Enter'); }
           await page.waitForTimeout(10000);
-          
-          // Claude's container classes are notoriously volatile. 
           const claudeResponses = await page.$$('.font-claude-message, .prose, [data-test-render-count]'); 
-          if (claudeResponses.length > 0) {
-            textOutput = await claudeResponses[claudeResponses.length - 1].innerText();
-          } else {
-             textOutput = "Engine Error: Could not find Claude's response class on the page.";
-          }
+          if (claudeResponses.length > 0) textOutput = await claudeResponses[claudeResponses.length - 1].innerText();
           break;
 
         case 'gemini':
           await page.goto('https://gemini.google.com/app', { waitUntil: 'domcontentloaded' });
-          // Fixed Strict Mode: Target specifically the inner editor and use .first()
           const geminiInput = '.ql-editor'; 
           await page.waitForSelector(geminiInput, { timeout: 15000 });
           await page.locator(geminiInput).first().focus();
-          
-          // Clear any existing text just in case, then type
           await page.keyboard.insertText(promptText);
           await page.waitForTimeout(500);
-          
           await page.keyboard.press('Enter'); 
-          
           await page.waitForTimeout(10000);
-          
           const geminiResponses = await page.$$('model-response, .message-content'); 
-          if (geminiResponses.length > 0) {
-            textOutput = await geminiResponses[geminiResponses.length - 1].innerText();
-          } else {
-             textOutput = "Engine Error: Could not find Gemini's response class on the page.";
-          }
+          if (geminiResponses.length > 0) textOutput = await geminiResponses[geminiResponses.length - 1].innerText();
           break;
 
         default:
@@ -181,33 +203,19 @@ app.whenReady().then(() => {
       }
 
       return textOutput;
-
     } catch (error) {
-      console.error(error);
       if (error instanceof Error) return "Engine Error: " + error.message;
       return "Engine Error: " + String(error);
     } finally {
-      // 🛡️ THE BULLETPROOF SHIELD: Always close the browser, even on errors
-      if (context) {
-        console.log("🧹 Cleaning up browser context...");
-        await context.close();
-      }
+      if (context) await context.close();
     }
   });
-  
-
-  createWindow()
 
   app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()

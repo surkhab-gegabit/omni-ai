@@ -3,11 +3,28 @@ import { motion } from 'framer-motion'
 
 function App() {
   const [prompt, setPrompt] = useState('')
-  const [messages, setMessages] = useState<{role: string, content: string}[]>([])
+  const [messages, setMessages] = useState<{ role: string, content: string }[]>([])
   const [isThinking, setIsThinking] = useState(false)
-  const [activeModel, setActiveModel] = useState('chatgpt') 
-  
+  const [activeModel, setActiveModel] = useState('chatgpt')
+
+  // --- 1. HARDWARE TELEMETRY STATE ---
+  const [hardware, setHardware] = useState({ cpu: 0, ram: 0 })
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // --- 2. LISTEN FOR DATA STREAMS ---
+  useEffect(() => {
+    // @ts-ignore
+    window.electron.ipcRenderer.on('hardware-telemetry', (_, data) => {
+      setHardware(data);
+    });
+
+    // Clean up listener on unmount
+    return () => {
+      // @ts-ignore
+      window.electron.ipcRenderer.removeAllListeners('hardware-telemetry');
+    };
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -17,13 +34,13 @@ function App() {
     if (!prompt.trim() || isThinking) return;
 
     const userMessage = prompt;
-    setPrompt(''); 
-    
+    setPrompt('');
+
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsThinking(true);
 
     try {
-      const recentHistory = messages.slice(-4); 
+      const recentHistory = messages.slice(-4);
       let contextualPrompt = userMessage;
 
       if (recentHistory.length > 0) {
@@ -33,10 +50,10 @@ function App() {
       }
 
       const payload = { promptText: contextualPrompt, model: activeModel };
-      
+
       // @ts-ignore
       const response = await window.electron.ipcRenderer.invoke('send-prompt', payload);
-      
+
       setMessages(prev => [...prev, { role: 'ai', content: response }]);
     } catch (error) {
       setMessages(prev => [...prev, { role: 'ai', content: "System Error: Could not reach the engine." }]);
@@ -46,70 +63,61 @@ function App() {
   }
 
   return (
-    // Base layout relies on a completely transparent background so Electron Acrylic can display behind it
-    // Updated to a motion.div for the native Apple-style spring launch animation
-    <motion.div 
+    <motion.div
       initial={{ scale: 0.94, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      transition={{
-        type: "spring",
-        stiffness: 260,
-        damping: 26,
-        mass: 1
-      }}
+      transition={{ type: "spring", stiffness: 260, damping: 26, mass: 1 }}
       className="flex flex-col h-screen w-full bg-transparent text-gray-200 font-sans antialiased selection:bg-blue-500/30"
     >
-      
-      {/* 1. NATIVE WINDOW HEADER BAR (Draggable region) */}
-      <div 
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} 
+
+      {/* 1. NATIVE WINDOW HEADER BAR */}
+      <div
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         className="h-12 w-full flex-shrink-0 flex items-center border-b border-white/[0.06] bg-black/10 backdrop-blur-md select-none px-4 relative"
       >
-        {/* macOS Traffic Light Buttons - Now with Native Hover Icons */}
         <div className="flex gap-2 absolute left-4 items-center group" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           
-          {/* Close (Red) */}
-          <button 
+          <button
             onClick={() => {
-              // @ts-ignore
+              /* @ts-ignore */
               window.electron.ipcRenderer.send('window-close')
             }}
             className="w-3 h-3 flex items-center justify-center rounded-full bg-[#ff5f56] border border-black/10 transition-colors"
           >
             <svg className="w-2 h-2 opacity-0 group-hover:opacity-100 text-black/60 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
             </svg>
           </button>
-
-          {/* Minimize (Yellow) */}
-          <button 
+          
+          <button
             onClick={() => {
-              // @ts-ignore
+              /* @ts-ignore */
               window.electron.ipcRenderer.send('window-minimize')
             }}
             className="w-3 h-3 flex items-center justify-center rounded-full bg-[#ffbd2e] border border-black/10 transition-colors"
           >
             <svg className="w-2 h-2 opacity-0 group-hover:opacity-100 text-black/60 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14"/>
+              <path d="M5 12h14" />
             </svg>
           </button>
-
-          {/* Maximize (Green) */}
-          <button 
+          
+          <button
             onClick={() => {
-              // @ts-ignore
+              /* @ts-ignore */
               window.electron.ipcRenderer.send('window-maximize')
             }}
             className="w-3 h-3 flex items-center justify-center rounded-full bg-[#27c93f] border border-black/10 transition-colors"
           >
             <svg className="w-[8px] h-[8px] opacity-0 group-hover:opacity-100 text-black/60 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
+              <path d="M15 3h6v6" />
+              <path d="M9 21H3v-6" />
+              <path d="M21 3l-7 7" />
+              <path d="M3 21l7-7" />
             </svg>
           </button>
-          
-        </div>
 
-        {/* Centered Title */}
+        </div>
         <div className="w-full flex justify-center">
           <span className="text-[11px] font-semibold text-gray-400 tracking-widest uppercase">
             Omni<span className="text-blue-400">AI</span>
@@ -117,32 +125,27 @@ function App() {
         </div>
       </div>
 
-      {/* MAIN LAYOUT SPLIT (Non-draggable) */}
-      <div 
-        className="flex flex-1 overflow-hidden" 
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      >
+      <div className="flex flex-1 overflow-hidden" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {/* 2. MACOS TRANSLUCENT SIDEBAR */}
         <div className="w-60 bg-black/20 backdrop-blur-3xl p-3 flex flex-col border-r border-white/[0.06] justify-between select-none">
           <div>
             <div className="text-[10px] text-gray-500 font-bold mb-3 tracking-wider uppercase px-3">
               Engines
             </div>
-            
-            {/* FLUID TAB SWITCHER IMPLEMENTATION */}
+
             <div className="flex flex-col gap-[2px] relative">
               
-              {/* ChatGPT Button */}
-              <button 
+              {/* ChatGPT */}
+              <button
                 onClick={() => setActiveModel('chatgpt')}
                 className={`relative px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors duration-150 flex items-center justify-between ${
                   activeModel === 'chatgpt' ? 'text-white font-semibold' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
                 }`}
               >
                 {activeModel === 'chatgpt' && (
-                  <motion.div 
-                    layoutId="activeEngine" 
-                    className="absolute inset-0 bg-white/[0.12] rounded-lg shadow-sm border border-white/[0.04]" 
+                  <motion.div
+                    layoutId="activeEngine"
+                    className="absolute inset-0 bg-white/[0.12] rounded-lg shadow-sm border border-white/[0.04]"
                     transition={{ type: "spring", stiffness: 300, damping: 28, mass: 1 }}
                   />
                 )}
@@ -152,18 +155,18 @@ function App() {
                 </div>
                 {activeModel === 'chatgpt' && <span className="text-[10px] text-emerald-400 font-mono opacity-80 relative z-10">Active</span>}
               </button>
-
-              {/* Claude Button */}
-              <button 
+              
+              {/* Claude */}
+              <button
                 onClick={() => setActiveModel('claude')}
                 className={`relative px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors duration-150 flex items-center justify-between ${
                   activeModel === 'claude' ? 'text-white font-semibold' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
                 }`}
               >
                 {activeModel === 'claude' && (
-                  <motion.div 
-                    layoutId="activeEngine" 
-                    className="absolute inset-0 bg-white/[0.12] rounded-lg shadow-sm border border-white/[0.04]" 
+                  <motion.div
+                    layoutId="activeEngine"
+                    className="absolute inset-0 bg-white/[0.12] rounded-lg shadow-sm border border-white/[0.04]"
                     transition={{ type: "spring", stiffness: 300, damping: 28, mass: 1 }}
                   />
                 )}
@@ -173,18 +176,18 @@ function App() {
                 </div>
                 {activeModel === 'claude' && <span className="text-[10px] text-orange-400 font-mono opacity-80 relative z-10">Active</span>}
               </button>
-
-              {/* Gemini Button */}
-              <button 
+              
+              {/* Gemini */}
+              <button
                 onClick={() => setActiveModel('gemini')}
                 className={`relative px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors duration-150 flex items-center justify-between ${
                   activeModel === 'gemini' ? 'text-white font-semibold' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
                 }`}
               >
                 {activeModel === 'gemini' && (
-                  <motion.div 
-                    layoutId="activeEngine" 
-                    className="absolute inset-0 bg-white/[0.12] rounded-lg shadow-sm border border-white/[0.04]" 
+                  <motion.div
+                    layoutId="activeEngine"
+                    className="absolute inset-0 bg-white/[0.12] rounded-lg shadow-sm border border-white/[0.04]"
                     transition={{ type: "spring", stiffness: 300, damping: 28, mass: 1 }}
                   />
                 )}
@@ -194,16 +197,83 @@ function App() {
                 </div>
                 {activeModel === 'gemini' && <span className="text-[10px] text-blue-400 font-mono opacity-80 relative z-10">Active</span>}
               </button>
+              
+              {/* Local Llama */}
+              <button
+                onClick={() => setActiveModel('local-llama')}
+                className={`relative px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors duration-150 flex items-center justify-between mt-2 ${
+                  activeModel === 'local-llama' ? 'text-white font-semibold' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
+                }`}
+              >
+                <div className="absolute -top-1 left-3 right-3 h-[1px] bg-white/[0.04]" />
+                {activeModel === 'local-llama' && (
+                  <motion.div
+                    layoutId="activeEngine"
+                    className="absolute inset-0 bg-white/[0.12] rounded-lg shadow-sm border border-white/[0.04]"
+                    transition={{ type: "spring", stiffness: 300, damping: 28, mass: 1 }}
+                  />
+                )}
+                <div className="flex items-center gap-2.5 relative z-10">
+                  <div className={`w-2 h-2 rounded-full transition-colors ${activeModel === 'local-llama' ? 'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.5)]' : 'bg-gray-600'}`}></div>
+                  Local Llama
+                </div>
+                {activeModel === 'local-llama' && <span className="text-[10px] text-purple-400 font-mono opacity-80 relative z-10">Offline</span>}
+              </button>
 
             </div>
           </div>
-          
-          <button 
-            onClick={() => setMessages([])}
-            className="text-xs text-gray-400 hover:text-white hover:bg-white/[0.06] transition-all py-2 rounded-lg text-center font-medium border border-white/[0.04]"
-          >
-            Clear Conversation
-          </button>
+
+          <div className="flex flex-col gap-3">
+            {/* 3. NEW SYSTEM DASHBOARD UI */}
+            <div className="pt-4 border-t border-white/[0.06]">
+              <div className="text-[10px] text-gray-500 font-bold mb-3 tracking-wider uppercase px-3">
+                System
+              </div>
+              
+              <div className="px-3 flex flex-col gap-3">
+                
+                {/* CPU Bar */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-400">CPU</span>
+                    <span className="text-gray-200 font-mono">{hardware.cpu}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/[0.04]">
+                    <div
+                      className={`h-full transition-all duration-1000 ${
+                        hardware.cpu > 75 ? 'bg-red-400' : hardware.cpu > 50 ? 'bg-yellow-400' : 'bg-emerald-400'
+                      }`}
+                      style={{ width: `${hardware.cpu}%` }}
+                    ></div>
+                  </div>
+                </div>
+                
+                {/* RAM Bar */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-400">RAM</span>
+                    <span className="text-gray-200 font-mono">{hardware.ram}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/[0.04]">
+                    <div
+                      className={`h-full transition-all duration-1000 ${
+                        hardware.ram > 85 ? 'bg-orange-400' : 'bg-blue-400'
+                      }`}
+                      style={{ width: `${hardware.ram}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <button
+              onClick={() => setMessages([])}
+              className="text-xs text-gray-400 hover:text-white hover:bg-white/[0.06] transition-all py-2 rounded-lg text-center font-medium border border-white/[0.04] mt-2"
+            >
+              Clear Conversation
+            </button>
+          </div>
         </div>
 
         {/* 3. CHAT CONTENT MODULE */}
@@ -220,18 +290,19 @@ function App() {
             ) : (
               messages.map((msg, idx) => (
                 <div key={idx} className={`max-w-2xl mx-auto w-full flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`px-4 py-3 text-[14px] leading-relaxed max-w-[85%] whitespace-pre-wrap ${
-                    msg.role === 'user' 
-                      ? 'bg-blue-500 text-white rounded-2xl rounded-tr-sm shadow-sm font-normal' 
-                      : 'bg-white/[0.06] border border-white/[0.06] text-gray-100 shadow-sm rounded-2xl rounded-tl-sm'
-                  }`}>
+                  <div
+                    className={`px-4 py-3 text-[14px] leading-relaxed max-w-[85%] whitespace-pre-wrap ${
+                      msg.role === 'user'
+                        ? 'bg-blue-500 text-white rounded-2xl rounded-tr-sm shadow-sm font-normal'
+                        : 'bg-white/[0.06] border border-white/[0.06] text-gray-100 shadow-sm rounded-2xl rounded-tl-sm'
+                    }`}
+                  >
                     {msg.content}
                   </div>
                 </div>
               ))
             )}
-            
-            {/* Native OS Style Processing Indicator */}
+
             {isThinking && (
               <div className="max-w-2xl mx-auto w-full flex justify-start">
                 <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-white/[0.04] border border-white/[0.06] text-gray-400 flex items-center gap-3 shadow-sm">
@@ -240,7 +311,9 @@ function App() {
                     <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                     <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                   </div>
-                  <span className="text-xs font-medium text-gray-400">Routing to {activeModel}...</span>
+                  <span className="text-xs font-medium text-gray-400">
+                    Routing to {activeModel === 'local-llama' ? 'Local Llama' : activeModel}...
+                  </span>
                 </div>
               </div>
             )}
@@ -255,11 +328,13 @@ function App() {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder={`Ask ${activeModel === 'chatgpt' ? 'ChatGPT' : activeModel === 'claude' ? 'Claude' : 'Gemini'}...`}
+                placeholder={`Ask ${
+                  activeModel === 'chatgpt' ? 'ChatGPT' : activeModel === 'claude' ? 'Claude' : activeModel === 'gemini' ? 'Gemini' : 'Local Llama'
+                }...`}
                 disabled={isThinking}
                 className="w-full bg-white/[0.06] border border-white/[0.08] rounded-full pl-5 pr-20 py-3 text-white focus:outline-none focus:border-white/[0.18] focus:bg-white/[0.09] transition-all shadow-xl disabled:opacity-40 placeholder-gray-500 text-[14px]"
               />
-              <button 
+              <button
                 onClick={handleSend}
                 disabled={isThinking || !prompt.trim()}
                 className="absolute right-1.5 bg-white text-black hover:bg-gray-200 disabled:hover:bg-white px-4 py-1.5 rounded-full font-semibold transition-all disabled:opacity-20 disabled:cursor-not-allowed shadow-sm text-xs"
