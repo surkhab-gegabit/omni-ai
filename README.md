@@ -12,17 +12,17 @@ Built on an **Electron** architecture, this application utilizes **Playwright** 
 
 ## ✨ System Architecture & Key Features
 
-### 1. The Auto-Routing Engine
+### 1. The Auto Routing Engine
 Instead of relying on rate limited public APIs, OmniAI utilizes a hidden Playwright stealth browser layer to securely orchestrate prompts directly through the native web interfaces of ChatGPT, Claude, and Gemini. 
 * Implements `puppeteer-extra-plugin-stealth` to bypass strict automation detection.
 * Uses Electron's `ipcMain` and `ipcRenderer` to securely bridge UI inputs to the background browser context.
 
-### 2. Air-Gapped Local Inference (Ollama)
+### 2. Air Gapped Local Inference (Ollama)
 For maximum privacy and offline capability, OmniAI seamlessly integrates with **Ollama** to run large language models directly on physical hardware.
 * Routes requests to `localhost:11434` to run Meta's Llama 3 model locally.
 * Zero data leaves the machine when the "Local Llama" engine is engaged.
 
-### 3. Real-Time Hardware Telemetry
+### 3. Real Time Hardware Telemetry
 The application monitors system load in real time, providing crucial visibility into CPU and RAM consumption when running heavy local neural networks.
 * Taps into Node.js native `os` module for accurate system polling.
 * Broadcasts telemetry streams at 10Hz via secure Electron IPC channels to a dynamic React dashboard.
@@ -31,7 +31,7 @@ The application monitors system load in real time, providing crucial visibility 
 The frontend is engineered to feel like a premium, native operating system utility rather than a packaged website.
 * Custom, draggable title bar with native window controls (Minimize, Maximize, Close).
 * **Framer Motion** spring-physics for natural window scaling, layout shifts, and tab sliding.
-* Native system-level background translucency (Windows Acrylic/macOS Vibrancy).
+* Native system level background translucency (Windows Acrylic/macOS Vibrancy).
 
 ---
 
@@ -58,3 +58,5 @@ The frontend is engineered to feel like a premium, native operating system utili
    ```bash
    git clone [https://github.com/surkhab-gegabit/omni-ai.git](https://github.com/surkhab-gegabit/omni-ai.git)
    cd omni-ai
+
+   
